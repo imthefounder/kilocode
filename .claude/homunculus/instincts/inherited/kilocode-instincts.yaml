@@ -1,0 +1,322 @@
+# Instincts generated from https://github.com/imthefounder/kilocode
+# Generated: 2026-05-26T20:36:03.295Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: kilocode-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/imthefounder/kilocode
+---
+
+# Kilocode Commit Length
+
+## Action
+
+Write moderate-length commit messages (~60 characters)
+
+## Evidence
+
+- Average commit message length: 60 chars
+- Based on 5 commits
+
+---
+id: kilocode-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/imthefounder/kilocode
+---
+
+# Kilocode Naming Files
+
+## Action
+
+Use camelCase naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: camelCase
+
+---
+id: kilocode-import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/imthefounder/kilocode
+---
+
+# Kilocode Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: kilocode-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/imthefounder/kilocode
+---
+
+# Kilocode Export Style
+
+## Action
+
+Prefer named exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: named
+
+---
+id: kilocode-workflow-update-provider-documentation
+trigger: "when doing update provider documentation"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/imthefounder/kilocode
+---
+
+# Kilocode Workflow Update Provider Documentation
+
+## Action
+
+Follow the update-provider-documentation workflow:
+1. Edit or create the relevant markdown file for the provider under packages/kilo-docs/pages/ai-providers/
+2. Commit the changes with a docs(kilo-docs): message prefix
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: packages/kilo-docs/pages/ai-providers/*.md
+
+---
+id: kilocode-instinct-camelcase-files
+trigger: "When creating or renaming a file in the repository"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: imthefounder/kilocode
+---
+
+# Kilocode Instinct Camelcase Files
+
+## Action
+
+Name the file using camelCase convention
+
+## Evidence
+
+- Pattern in namingConventions.files: camelCase
+
+---
+id: kilocode-instinct-camelcase-functions
+trigger: "When defining a function"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: imthefounder/kilocode
+---
+
+# Kilocode Instinct Camelcase Functions
+
+## Action
+
+Name the function using camelCase convention
+
+## Evidence
+
+- Pattern in namingConventions.functions: camelCase
+
+---
+id: kilocode-instinct-pascalcase-classes
+trigger: "When defining a class"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: imthefounder/kilocode
+---
+
+# Kilocode Instinct Pascalcase Classes
+
+## Action
+
+Name the class using PascalCase convention
+
+## Evidence
+
+- Pattern in namingConventions.classes: PascalCase
+
+---
+id: kilocode-instinct-screaming-constants
+trigger: "When defining a constant"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: imthefounder/kilocode
+---
+
+# Kilocode Instinct Screaming Constants
+
+## Action
+
+Name the constant using SCREAMING_SNAKE_CASE convention
+
+## Evidence
+
+- Pattern in namingConventions.constants: SCREAMING_SNAKE_CASE
+
+---
+id: kilocode-instinct-relative-imports
+trigger: "When importing modules in TypeScript files"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: imthefounder/kilocode
+---
+
+# Kilocode Instinct Relative Imports
+
+## Action
+
+Use relative import paths
+
+## Evidence
+
+- Pattern in importStyle: relative
+
+---
+id: kilocode-instinct-named-exports
+trigger: "When exporting modules or functions"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: imthefounder/kilocode
+---
+
+# Kilocode Instinct Named Exports
+
+## Action
+
+Use named exports instead of default exports
+
+## Evidence
+
+- Pattern in exportStyle: named
+
+---
+id: kilocode-instinct-test-location-mixed
+trigger: "When adding or updating tests"
+confidence: 0.7
+domain: testing
+source: repo-analysis
+source_repo: imthefounder/kilocode
+---
+
+# Kilocode Instinct Test Location Mixed
+
+## Action
+
+Place test files in either the same folder as source code or in a dedicated tests folder, as both patterns are present
+
+## Evidence
+
+- architecture.folderStructure.testLocation: mixed
+
+---
+id: kilocode-instinct-commit-prefix-docs
+trigger: "When committing documentation changes"
+confidence: 0.9
+domain: git
+source: repo-analysis
+source_repo: imthefounder/kilocode
+---
+
+# Kilocode Instinct Commit Prefix Docs
+
+## Action
+
+Prefix the commit message with docs(kilo-docs):
+
+## Evidence
+
+- Seen in commit: docs(kilo-docs): add xAI SuperGrok subscription and OAuth login documentation
+- Pattern in commit prefixes: docs
+
+---
+id: kilocode-instinct-commit-prefix-release
+trigger: "When making a release commit"
+confidence: 0.9
+domain: git
+source: repo-analysis
+source_repo: imthefounder/kilocode
+---
+
+# Kilocode Instinct Commit Prefix Release
+
+## Action
+
+Prefix the commit message with release:
+
+## Evidence
+
+- Seen in commit: release: v7.3.11
+- Pattern in commit prefixes: release
+
+---
+id: kilocode-instinct-commit-length
+trigger: "When writing a commit message"
+confidence: 0.7
+domain: git
+source: repo-analysis
+source_repo: imthefounder/kilocode
+---
+
+# Kilocode Instinct Commit Length
+
+## Action
+
+Keep the commit message concise, around 60 characters on average
+
+## Evidence
+
+- commits.averageLength: 60
+
+---
+id: kilocode-instinct-update-provider-docs
+trigger: "When documenting new features, changes, or instructions for an AI provider in kilo-docs"
+confidence: 0.95
+domain: workflow
+source: repo-analysis
+source_repo: imthefounder/kilocode
+---
+
+# Kilocode Instinct Update Provider Docs
+
+## Action
+
+Edit or create the relevant markdown file under packages/kilo-docs/pages/ai-providers/ and commit with a docs(kilo-docs): message prefix
+
+## Evidence
+
+- Workflow: update-provider-documentation
+- Seen in commit: docs(kilo-docs): add xAI SuperGrok subscription and OAuth login documentation
+- Pattern in files: packages/kilo-docs/pages/ai-providers/*.md
+
