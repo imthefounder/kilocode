@@ -4,91 +4,40 @@ import ai.kilocode.client.plugin.KiloBundle
 import ai.kilocode.client.session.model.Content
 import ai.kilocode.client.session.model.Tool
 import ai.kilocode.client.session.model.ToolExecState
+import ai.kilocode.client.session.ui.popup.HeaderPopupRequest
 import ai.kilocode.client.session.ui.style.SessionEditorStyle
 import ai.kilocode.client.session.ui.style.SessionUiStyle
-import ai.kilocode.client.session.views.base.PartView
+import ai.kilocode.client.session.views.SessionViewIcons
+import ai.kilocode.client.session.views.base.AbstractSessionPartView
+import ai.kilocode.client.session.views.base.PartHeader
+import ai.kilocode.client.session.views.tool.ApprovalReasonTarget
+import ai.kilocode.client.session.views.tool.ToolApprovalFooter
+import ai.kilocode.client.session.views.tool.approvalReasonsVisible
 import ai.kilocode.client.ui.UiStyle
-import com.intellij.icons.AllIcons
+import ai.kilocode.client.ui.layout.Stack
+import ai.kilocode.rpc.dto.TodoDto
 import com.intellij.ui.components.JBLabel
+import com.intellij.util.concurrency.annotations.RequiresEdt
 import com.intellij.util.ui.JBUI
-import java.awt.BorderLayout
-import java.awt.Color
-import java.awt.Component
-import java.awt.Cursor
 import java.awt.Font
-import java.awt.event.MouseAdapter
-import java.awt.event.MouseEvent
-import javax.swing.Box
 import javax.swing.JComponent
-import javax.swing.JPanel
-import javax.swing.SwingUtilities
 
-class TodoWriteView(tool: Tool) : PartView() {
+class TodoWriteView(
+    tool: Tool,
+    private val parts: TodoParts = todoParts(),
+    private val footer: ToolApprovalFooter = ToolApprovalFooter(),
+) : AbstractSessionPartView(parts.header, { parts.list }, { footer }, expanded = true), ApprovalReasonTarget {
 
     override val contentId = tool.id
 
     private var item = tool
     private var style = SessionEditorStyle.current()
 
-    private val root = JPanel(BorderLayout()).apply {
-        isOpaque = true
-        background = SessionUiStyle.View.surface()
-        border = SessionUiStyle.View.card()
-    }
-    private val header = JPanel(BorderLayout(JBUI.scale(SessionUiStyle.View.CARD_LAYOUT_GAP), 0)).apply {
-        isOpaque = true
-        background = SessionUiStyle.View.header()
-        border = JBUI.Borders.empty(
-            JBUI.scale(SessionUiStyle.View.CARD_VERTICAL_PADDING),
-            JBUI.scale(SessionUiStyle.View.CARD_HORIZONTAL_PADDING),
-        )
-    }
-    private val glyph = JBLabel(AllIcons.Actions.Checked)
-    private val title = JBLabel(KiloBundle.message("session.part.todo.title"))
-    private val sub = JBLabel().apply { foreground = UiStyle.Colors.weak() }
-    private val arrow = JBLabel(AllIcons.General.ArrowDown)
-    private val center = JPanel(BorderLayout(JBUI.scale(SessionUiStyle.View.CARD_LAYOUT_GAP), 0)).apply {
-        isOpaque = false
-    }
-    private val controls: JComponent = Box.createHorizontalBox().apply { add(arrow) }
-    private val list = TodoListPanel()
-
-    private val click = object : MouseAdapter() {
-        override fun mouseClicked(e: MouseEvent) {
-            toggle()
-        }
-    }
-    private val mouse = object : MouseAdapter() {
-        override fun mouseEntered(e: MouseEvent) {
-            setHover(true)
-        }
-
-        override fun mouseExited(e: MouseEvent) {
-            if (inside(e)) return
-            setHover(false)
-        }
-    }
-
     init {
-        layout = BorderLayout()
-        isOpaque = false
-        center.add(title, BorderLayout.WEST)
-        center.add(sub, BorderLayout.CENTER)
-        header.add(glyph, BorderLayout.WEST)
-        header.add(center, BorderLayout.CENTER)
-        header.add(controls, BorderLayout.EAST)
-        root.add(header, BorderLayout.NORTH)
-        root.add(list, BorderLayout.CENTER)
-        list.border = JBUI.Borders.compound(
-            SessionUiStyle.View.cardTop(),
-            JBUI.Borders.empty(UiStyle.Gap.sm(), UiStyle.Gap.md()),
-        )
-        listOf(header, glyph, title, sub, arrow, center, controls).forEach {
-            bind(it)
-            it.addMouseListener(click)
-        }
+        // Transparent list body: the base separates it from the header with the standard gap, so no
+        // separator line is drawn here — only the content padding remains.
+        parts.list.border = JBUI.Borders.empty(UiStyle.Gap.lg(), UiStyle.Gap.pad())
         applyStyle(style)
-        add(root, BorderLayout.CENTER)
         sync()
     }
 
@@ -98,99 +47,93 @@ class TodoWriteView(tool: Tool) : PartView() {
         sync()
     }
 
+    @RequiresEdt
+    override fun headerPopup(): HeaderPopupRequest? {
+        val data = rows(item)
+        val present = data.todos.isNotEmpty() || data.before > 0 || data.after > 0
+        return popup("part", "todo", present) { buildPopup(data) }
+    }
+
+    @RequiresEdt
+    private fun buildPopup(data: Rows) = componentPopupBody(
+        TodoListPanel(data.todos, data.before, data.after).apply {
+            border = JBUI.Borders.empty(UiStyle.Gap.lg(), UiStyle.Gap.pad())
+            applyStyle(style)
+        },
+    )
+
     override fun applyStyle(style: SessionEditorStyle) {
         this.style = style
         var changed = false
-        changed = setFont(title, style.boldEditorFont) || changed
-        changed = setFont(sub, style.transcriptFont) || changed
-        list.applyStyle(style)
+        changed = setFont(parts.title, style.boldEditorFont) || changed
+        changed = setFont(parts.sub, style.transcriptFont) || changed
+        parts.list.applyStyle(style)
+        changed = footer.applyStyle(style) || changed
         if (changed) refresh()
     }
 
-    fun toggle() {
-        val changed = if (isExpanded()) detach() else attach()
-        if (!changed) return
-        syncArrow()
-        refresh()
+    @RequiresEdt
+    override fun syncApprovalReason(visible: Boolean): Boolean {
+        val changed = footer.update(item, visible)
+        if (changed) refresh()
+        return changed
     }
 
-    fun isExpanded() = list.parent === root
-
-    fun labelText(): String = listOf(title.text, sub.text).filter { it.isNotBlank() }.joinToString(" ")
-
-    internal fun rowCount() = list.rowCount()
-
-    internal fun rowText(index: Int) = list.rowText(index)
-
-    internal fun rowChecked(index: Int) = list.rowChecked(index)
-
-    internal fun rowCheckboxOpaque(index: Int) = list.rowCheckboxOpaque(index)
-
-    internal fun rowForeground(index: Int) = list.rowForeground(index)
-
-    internal fun hiddenText() = list.hiddenText()
-
-    internal fun titleFont() = title.font
-
-    internal fun subtitleFont() = sub.font
+    fun labelText(): String = listOf(parts.title.text, parts.sub.text).filter { it.isNotBlank() }.joinToString(" ")
+    internal fun rowCount() = parts.list.rowCount()
+    internal fun rowText(index: Int) = parts.list.rowText(index)
+    internal fun rowChecked(index: Int) = parts.list.rowChecked(index)
+    internal fun rowCheckBackground(index: Int) = parts.list.rowCheckBackground(index)
+    internal fun rowCheckForeground(index: Int) = parts.list.rowCheckForeground(index)
+    internal fun rowCheckBorder(index: Int) = parts.list.rowCheckBorder(index)
+    internal fun rowCheckAccessibleName(index: Int) = parts.list.rowCheckAccessibleName(index)
+    internal fun rowFont(index: Int) = parts.list.rowFont(index)
+    internal fun rowForeground(index: Int) = parts.list.rowForeground(index)
+    internal fun hiddenText() = parts.list.hiddenText()
+    internal fun titleFont() = parts.title.font
+    internal fun subtitleFont() = parts.sub.font
 
     override fun dumpLabel() = "TodoWriteView#$contentId(${labelText()})"
 
     private fun sync() {
-        sub.text = subtitle(item)
-        val view = item.todoView
-        val compact = view?.mode == "compact"
-        val rows = if (compact) view.todos else item.todos
-        list.update(
-            rows,
-            hiddenBefore = if (compact) view.hiddenBefore else 0,
-            hiddenAfter = if (compact) view.hiddenAfter else 0,
+        parts.sub.text = subtitle(item)
+        val data = rows(item)
+        parts.list.update(
+            data.todos,
+            hiddenBefore = data.before,
+            hiddenAfter = data.after,
         )
-        syncArrow()
+        footer.update(item, approvalReasonsVisible())
+        syncExpandable(true)
         refresh()
-    }
-
-    private fun attach(): Boolean {
-        if (isExpanded()) return false
-        root.add(list, BorderLayout.CENTER)
-        return true
-    }
-
-    private fun detach(): Boolean {
-        if (!isExpanded()) return false
-        root.remove(list)
-        return true
-    }
-
-    private fun syncArrow() {
-        arrow.icon = if (isExpanded()) AllIcons.General.ArrowDown else AllIcons.General.ArrowRight
-    }
-
-    private fun setHover(value: Boolean) {
-        val color = if (value) SessionUiStyle.View.headerHover() else SessionUiStyle.View.header()
-        if (same(header.background, color)) return
-        header.background = color
-        header.repaint()
-    }
-
-    private fun inside(e: MouseEvent): Boolean {
-        val point = SwingUtilities.convertPoint(e.component, e.point, header)
-        return header.contains(point)
-    }
-
-    private fun bind(component: Component) {
-        component.cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-        component.addMouseListener(mouse)
-    }
-
-    private fun refresh() {
-        revalidate()
-        repaint()
     }
 
     companion object {
         fun canRender(tool: Tool) = tool.name == "todowrite" && tool.state == ToolExecState.COMPLETED
     }
+}
+
+class TodoParts(
+    val header: PartHeader,
+    val glyph: JBLabel,
+    val title: JBLabel,
+    val sub: JBLabel,
+    val left: Stack,
+    val right: Stack,
+    val list: TodoListPanel,
+)
+
+private fun todoParts(): TodoParts {
+    val glyph = JBLabel(SessionViewIcons.checklist)
+    val title = JBLabel(KiloBundle.message("session.part.todo.title"))
+    val sub = JBLabel().apply { foreground = SessionUiStyle.Text.Secondary.foreground() }
+    val header = PartHeader().apply {
+        leading(glyph)
+        left(title)
+        titleGap()
+        left(sub)
+    }
+    return TodoParts(header, glyph, title, sub, header.left, header.right, TodoListPanel())
 }
 
 private fun subtitle(tool: Tool): String {
@@ -200,10 +143,16 @@ private fun subtitle(tool: Tool): String {
     return "$done/$total"
 }
 
+private data class Rows(val todos: List<TodoDto>, val before: Int, val after: Int)
+
+private fun rows(tool: Tool): Rows {
+    val view = tool.todoView
+    if (view?.mode == "compact") return Rows(view.todos, view.hiddenBefore, view.hiddenAfter)
+    return Rows(tool.todos, 0, 0)
+}
+
 private fun setFont(component: JComponent, font: Font): Boolean {
     if (component.font == font) return false
     component.font = font
     return true
 }
-
-private fun same(a: Color?, b: Color): Boolean = a?.rgb == b.rgb

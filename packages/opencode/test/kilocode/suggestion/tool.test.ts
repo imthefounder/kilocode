@@ -1,3 +1,4 @@
+import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { afterEach, beforeEach, describe, expect, spyOn } from "bun:test"
 import { Effect, Fiber, Layer } from "effect"
 import { Command } from "../../../src/command"
@@ -22,7 +23,16 @@ const command = Layer.succeed(
     list: () => Effect.succeed(Object.values(cmds)),
   }),
 )
-const it = testEffect(Layer.mergeAll(Truncate.defaultLayer, Agent.defaultLayer, command))
+const statuses: Array<[string, SessionStatus.Info]> = []
+const status = Layer.succeed(
+  SessionStatus.Service,
+  SessionStatus.Service.of({
+    get: () => Effect.succeed({ type: "idle" }),
+    list: () => Effect.succeed(new Map()),
+    set: (sessionID, value) => Effect.sync(() => statuses.push([sessionID, value])),
+  }),
+)
+const it = testEffect(Layer.mergeAll(AppNodeBuilder.build(Truncate.node), AppNodeBuilder.build(Agent.node), command, status))
 
 const init = Effect.fn("SuggestToolTest.init")(function* () {
   const info = yield* SuggestTool
@@ -54,18 +64,16 @@ const ctx = {
 
 describe("tool.suggest", () => {
   let show: ReturnType<typeof spyOn>
-  let statusSet: ReturnType<typeof spyOn>
 
   beforeEach(() => {
     show = spyOn(Suggestion, "show")
-    statusSet = spyOn(SessionStatus, "set").mockResolvedValue(undefined as any)
     names.length = 0
+    statuses.length = 0
     for (const name of Object.keys(cmds)) delete cmds[name]
   })
 
   afterEach(() => {
     show.mockRestore()
-    statusSet.mockRestore()
   })
 
   it.live("returns dismissal result when suggestion is dismissed", () =>
@@ -75,8 +83,8 @@ describe("tool.suggest", () => {
 
       const result = yield* tool.execute(
         {
-          suggest: "Run review?",
-          actions: [{ label: "Start", prompt: "/local-review-uncommitted" }],
+          suggest: "Run checks?",
+          actions: [{ label: "Start", prompt: "/verify" }],
         },
         ctx as any,
       )
@@ -91,35 +99,35 @@ describe("tool.suggest", () => {
     Effect.gen(function* () {
       const tool = yield* init()
       show.mockResolvedValueOnce({
-        label: "Start review",
-        description: "Run a local review now",
-        prompt: "/local-review-uncommitted",
+        label: "Run checks",
+        description: "Run the project checks now",
+        prompt: "/verify",
       })
-      cmds["local-review-uncommitted"] = {
-        name: "local-review-uncommitted",
-        description: "local review (uncommitted changes)",
-        template: Promise.resolve("Review these uncommitted changes:\n\n## Files Changed\n..."),
+      cmds["verify"] = {
+        name: "verify",
+        description: "run project checks",
+        template: Promise.resolve("Run the project checks now."),
         hints: [],
       }
 
       const result = yield* tool.execute(
         {
-          suggest: "Run review?",
-          actions: [{ label: "Start review", prompt: "/local-review-uncommitted" }],
+          suggest: "Run checks?",
+          actions: [{ label: "Run checks", prompt: "/verify" }],
         },
         ctx as any,
       )
 
-      expect(result.title).toBe("User accepted: Start review")
-      expect(result.output).toContain("Review these uncommitted changes:")
+      expect(result.title).toBe("User accepted: Run checks")
+      expect(result.output).toContain("Run the project checks now.")
       expect(result.output).toContain("Carry out the following request now")
       expect(result.metadata.dismissed).toBe(false)
       expect(result.metadata.accepted).toEqual({
-        label: "Start review",
-        description: "Run a local review now",
-        prompt: "/local-review-uncommitted",
+        label: "Run checks",
+        description: "Run the project checks now",
+        prompt: "/verify",
       })
-      expect(names).toEqual(["local-review-uncommitted"])
+      expect(names).toEqual(["verify"])
     }),
   )
 
@@ -173,26 +181,26 @@ describe("tool.suggest", () => {
     Effect.gen(function* () {
       const tool = yield* init()
       show.mockResolvedValueOnce({
-        label: "Start review",
-        prompt: "/local-review-uncommitted",
+        label: "Run checks",
+        prompt: "/verify",
       })
-      cmds["local-review-uncommitted"] = {
-        name: "local-review-uncommitted",
-        description: "local review (uncommitted changes)",
+      cmds["verify"] = {
+        name: "verify",
+        description: "run project checks",
         template: Promise.reject(new Error("git not found")),
         hints: [],
       }
 
       const result = yield* tool.execute(
         {
-          suggest: "Run review?",
-          actions: [{ label: "Start review", prompt: "/local-review-uncommitted" }],
+          suggest: "Run checks?",
+          actions: [{ label: "Run checks", prompt: "/verify" }],
         },
         ctx as any,
       )
 
-      expect(result.title).toBe("User accepted: Start review")
-      expect(result.output).toContain("/local-review-uncommitted")
+      expect(result.title).toBe("User accepted: Run checks")
+      expect(result.output).toContain("/verify")
       expect(result.metadata.dismissed).toBe(false)
     }),
   )
@@ -207,8 +215,8 @@ describe("tool.suggest", () => {
 
       yield* tool.execute(
         {
-          suggest: "Run review?",
-          actions: [{ label: "Start", prompt: "/local-review-uncommitted" }],
+          suggest: "Run checks?",
+          actions: [{ label: "Start", prompt: "/verify" }],
         },
         ctx as any,
       )
@@ -250,8 +258,8 @@ describe("tool.suggest", () => {
       // idle status call has been issued.
       yield* Effect.sleep("10 millis")
 
-      expect(statusSet).toHaveBeenCalledWith(ctx.sessionID, { type: "idle" })
-      expect(statusSet).not.toHaveBeenCalledWith(ctx.sessionID, { type: "busy" })
+      expect(statuses).toContainEqual([ctx.sessionID, { type: "idle" }])
+      expect(statuses).not.toContainEqual([ctx.sessionID, { type: "busy" }])
 
       resolveShow({ label: "Start", prompt: "do it" })
       yield* Fiber.join(pending)
@@ -275,10 +283,7 @@ describe("tool.suggest", () => {
         ctx as any,
       )
 
-      const statuses = statusSet.mock.calls
-        .filter((call: unknown[]) => call[0] === ctx.sessionID)
-        .map((call: unknown[]) => (call[1] as { type: string }).type)
-      expect(statuses).toEqual(["idle", "busy"])
+      expect(statuses.map(([, value]) => value.type)).toEqual(["idle", "busy"])
     }),
   )
 
@@ -299,10 +304,7 @@ describe("tool.suggest", () => {
         ctx as any,
       )
 
-      const statuses = statusSet.mock.calls
-        .filter((call: unknown[]) => call[0] === ctx.sessionID)
-        .map((call: unknown[]) => (call[1] as { type: string }).type)
-      expect(statuses).toEqual(["idle"])
+      expect(statuses.map(([, value]) => value.type)).toEqual(["idle"])
     }),
   )
 })
